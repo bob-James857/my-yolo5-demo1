@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 目标检测展示 (Gradio API 版)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js"></script>
+    <style>
+        :root {
+            --font-family: 'Poppins', sans-serif;
+            --primary-color: #367BF5;
+            --primary-hover-color: #2a62c4;
+            --text-color: #333;
+            --text-secondary-color: #666;
+            --bg-color: #f4f7fc;
+            --card-bg-color: #ffffff;
+            --card-shadow: 0 6px 20px rgba(0, 0, 0, 0.07);
+            --border-color: #e0e0e0;
+        }
+
+        body.dark-mode {
+            --primary-color: #4A90E2;
+            --primary-hover-color: #5aa1f2;
+            --text-color: #f0f0f0;
+            --text-secondary-color: #a0a0a0;
+            --bg-color: #121212;
+            --card-bg-color: #1e1e1e;
+            --card-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+            --border-color: #333;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        header, footer {
+            width: 100%; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center;
+        }
+        footer { margin-top: auto; justify-content: center; color: var(--text-secondary-color); font-size: 0.9em; }
+        main { display: flex; justify-content: center; align-items: flex-start; flex-grow: 1; padding: 2rem; }
+        
+        .container {
+            width: 100%; max-width: 1100px; background: var(--card-bg-color); padding: 2rem 2.5rem;
+            border-radius: 16px; box-shadow: var(--card-shadow); transition: background-color 0.3s;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        
+        h1 { font-weight: 600; margin-bottom: 0.5rem; }
+        .subtitle { color: var(--text-secondary-color); margin-bottom: 2rem; text-align: center; }
+
+        .upload-area {
+            width: 100%; border: 2px dashed var(--border-color); border-radius: 10px;
+            padding: 2rem; margin-bottom: 1.5rem; cursor: pointer; text-align: center;
+            transition: border-color 0.3s, background-color 0.3s;
+        }
+        .upload-area:hover { border-color: var(--primary-color); background-color: rgba(54, 123, 245, 0.05); }
+        .upload-area svg { width: 50px; height: 50px; color: var(--primary-color); margin-bottom: 1rem; }
+        .upload-area p { margin: 0; font-weight: 500; }
+        input[type="file"] { display: none; }
+
+        #submit-btn {
+            width: 100%; max-width: 400px; padding: 15px; font-size: 1rem; font-weight: 600;
+            background: var(--primary-color); color: white; border: none;
+            border-radius: 8px; cursor: pointer; transition: background-color 0.3s, transform 0.2s;
+        }
+        #submit-btn:hover:not(:disabled) { background: var(--primary-hover-color); transform: translateY(-2px); }
+        #submit-btn:disabled { background-color: #aaa; cursor: not-allowed; }
+
+        #status {
+            display: flex; align-items: center; justify-content: center; margin-top: 1.5rem;
+            color: var(--text-secondary-color); min-height: 30px;
+        }
+        .spinner {
+            width: 20px; height: 20px; border: 3px solid rgba(0,0,0,0.1);
+            border-left-color: var(--primary-color); border-radius: 50%;
+            animation: spin 1s linear infinite; margin-right: 10px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .results-container {
+            width: 100%; margin-top: 2rem; display: flex;
+            justify-content: center; flex-wrap: wrap; gap: 2rem;
+        }
+        .result-box { flex: 1; min-width: 300px; max-width: 500px; border: 1px solid var(--border-color); padding: 1rem; border-radius: 10px; }
+        .result-box h3 { margin-top: 0; margin-bottom: 1rem; font-weight: 500; text-align: center; }
+        img { max-width: 100%; height: auto; border-radius: 6px; display: block; }
+        
+        #details-content { max-height: 400px; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+        th, td { border: 1px solid var(--border-color); padding: 8px; text-align: left; }
+        thead th { background-color: rgba(54, 123, 245, 0.05); position: sticky; top: 0; }
+
+
+        #theme-toggle { cursor: pointer; background: none; border: none; color: var(--text-secondary-color); font-size: 1.5rem; }
+    </style>
+</head>
+<body>
+    <header>
+        <h2>AI Showcase</h2>
+        <button id="theme-toggle" title="切换深色/浅色模式">☀️</button>
+    </header>
+    <main>
+        <div class="container">
+            <h1>AI 目标检测</h1>
+            <p class="subtitle">上传图片，体验由 Gradio API 驱动的实时物体识别</p>
+            <label for="image-input" class="upload-area" id="upload-label">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l-3.75 3.75M12 9.75l3.75 3.75M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM21 21H3" /></svg>
+                <p id="upload-text">点击或拖拽图片到此处</p>
+            </label>
+            <input type="file" id="image-input" accept="image/*">
+            <button id="submit-btn">开始检测</button>
+            <div id="status"></div>
+            <div class="results-container">
+                <div class="result-box" id="input-box" style="display:none;">
+                    <h3>原始图片</h3>
+                    <img id="input-image-preview" src="" alt="Input Image">
+                </div>
+                <div class="result-box" id="output-box" style="display:none;">
+                    <h3>检测结果</h3>
+                    <img id="output-image" src="" alt="Output Image">
+                </div>
+                 <div class="result-box" id="details-box" style="display:none;">
+                    <h3>检测到的物体详情</h3>
+                    <div id="details-content"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+    <footer>
+        <p>由 Gradio & GitHub Pages 强力驱动</p>
+    </footer>
+
+    <script type="module">
+        // Import the Gradio client function
+        import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
+
+        // --- DOM Elements ---
+        const imageInput = document.getElementById('image-input');
+        const submitBtn = document.getElementById('submit-btn');
+        const statusDiv = document.getElementById('status');
+        const inputImagePreview = document.getElementById('input-image-preview');
+        const outputImage = document.getElementById('output-image');
+        const inputBox = document.getElementById('input-box');
+        const outputBox = document.getElementById('output-box');
+        const uploadText = document.getElementById('upload-text');
+        const themeToggle = document.getElementById('theme-toggle');
+        const detailsBox = document.getElementById('details-box');
+        const detailsContent = document.getElementById('details-content');
+        
+        const API_URL = "https://ps3350382235-my-yolo5-demo.ms.show/";
+        let selectedFile = null;
+
+        // --- File Selection Logic ---
+        function handleFileSelect(file) {
+            if (file && file.type.startsWith('image/')) {
+                selectedFile = file;
+                uploadText.textContent = `已选择: ${file.name}`;
+                inputBox.style.display = 'block';
+                inputImagePreview.src = URL.createObjectURL(file);
+                outputBox.style.display = 'none';
+                detailsBox.style.display = 'none';
+            }
+        }
+
+        imageInput.addEventListener('change', (event) => handleFileSelect(event.target.files[0]));
+        const uploadArea = document.getElementById('upload-label');
+        uploadArea.addEventListener('dragover', (e) => e.preventDefault());
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            handleFileSelect(e.dataTransfer.files[0]);
+        });
+
+        // --- API Call Logic (using @gradio/client) ---
+        submitBtn.addEventListener('click', async () => {
+            if (!selectedFile) {
+                alert('请先选择一张图片！');
+                return;
+            }
+            submitBtn.disabled = true;
+            statusDiv.innerHTML = '<div class="spinner"></div><span>正在连接 API，请稍候...</span>';
+            outputBox.style.display = 'none';
+            detailsBox.style.display = 'none';
+
+            try {
+                // 1. Connect to the Gradio API
+                const app = await Client.connect(API_URL);
+                statusDiv.innerHTML = '<div class="spinner"></div><span>连接成功！正在上传并检测中...</span>';
+                
+                // 2. Send the file to the /predict endpoint
+                const result = await app.predict("/predict", { 
+                    input_image: selectedFile, 
+                });
+
+                // 3. Display the results
+                // result.data[0] is the output image
+                outputImage.src = result.data[0];
+                outputBox.style.display = 'block';
+
+                // result.data[1] is the dataframe with detection details
+                const detailsData = result.data[1];
+                if (detailsData && detailsData.data && detailsData.data.length > 0) {
+                    detailsContent.innerHTML = createTableFromData(detailsData);
+                    detailsBox.style.display = 'block';
+                } else {
+                    detailsContent.innerHTML = '<p>未检测到任何可识别的物体。</p>';
+                    detailsBox.style.display = 'block';
+                }
+
+                statusDiv.textContent = '检测完成！';
+
+            } catch (error) {
+                console.error("发生错误:", error);
+                statusDiv.textContent = `检测失败: ${error.message}`;
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+
+        // --- Helper function to create an HTML table from Gradio dataframe object ---
+        function createTableFromData(dataframe) {
+            if (!dataframe || !dataframe.headers || !dataframe.data) return '';
+            let table = '<table><thead><tr>';
+            dataframe.headers.forEach(header => {
+                table += `<th>${header}</th>`;
+            });
+            table += '</tr></thead><tbody>';
+            dataframe.data.forEach(row => {
+                table += '<tr>';
+                row.forEach(cell => {
+                    // Round numeric values for better readability
+                    const content = typeof cell === 'number' ? cell.toFixed(4) : cell;
+                    table += `<td>${content}</td>`;
+                });
+                table += '</tr>';
+            });
+            table += '</tbody></table>';
+            return table;
+        }
+
+        // --- Dark Mode Toggle ---
+        const currentTheme = localStorage.getItem('theme');
+        if (currentTheme === 'dark') {
+            document.body.classList.add('dark-mode');
+            themeToggle.textContent = '🌙';
+        }
+        themeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            let theme = document.body.classList.contains('dark-mode') ? 'dark' : 'light';
+            themeToggle.textContent = theme === 'dark' ? '🌙' : '☀️';
+            localStorage.setItem('theme', theme);
+        });
+    </script>
+</body>
+</html>
