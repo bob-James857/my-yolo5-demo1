@@ -18,7 +18,6 @@
             --bg-color: #f4f7fc;
             --card-bg-color: #ffffff;
             --card-shadow: 0 6px 20px rgba(0, 0, 0, 0.07);
-            --border-color: #e0e0e0;
         }
 
         body.dark-mode {
@@ -128,7 +127,7 @@
                     <h3>检测结果</h3>
                     <img id="output-image" src="" alt="Output Image">
                 </div>
-                 <div class="result-box" id="details-box" style="display:none;">
+                   <div class="result-box" id="details-box" style="display:none;">
                     <h3>检测到的物体详情</h3>
                     <div id="details-content"></div>
                 </div>
@@ -156,7 +155,8 @@
         const detailsBox = document.getElementById('details-box');
         const detailsContent = document.getElementById('details-content');
         
-        const API_URL = "https://ps3350382235-my-yolo5-demo.ms.show/";
+        // --- 核心修改在这里：添加 /api/ 子路径 ---
+        const API_URL = "https://ps3350382235-my-yolo5-demo.ms.show/api/"; // <-- 已修改
         let selectedFile = null;
 
         // --- File Selection Logic ---
@@ -192,7 +192,8 @@
 
             try {
                 // 1. Connect to the Gradio API
-                const app = await Client.connect(API_URL);
+                // @gradio/client 库会自动处理 /config 路径的请求
+                const app = await Client.connect(API_URL); // <-- 使用新的 API_URL
                 statusDiv.innerHTML = '<div class="spinner"></div><span>连接成功！正在上传并检测中...</span>';
                 
                 // 2. Send the file to the /predict endpoint
